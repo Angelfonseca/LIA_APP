@@ -5,6 +5,8 @@
         "sensor": "String",
         "pot": "Number",
         "volt": "Number",
-        "amp": "Number"
+        "amp": "Number",
+        "rack": "String",
+        "granjaCamara": "String"
     }
 }

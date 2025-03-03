@@ -10,6 +10,8 @@ const InvernaderoSchema = new mongoose.Schema(
         pot: { type: Number, required: true },
         volt: { type: Number, required: true },
         amp: { type: Number, required: true },
+        rack: { type: String, required: true },
+        granjaCamara: { type: String, required: true },
       },
     },
   },

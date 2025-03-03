@@ -40,7 +40,7 @@ const DataController = {
 
     create: async (req, res) => {
         try {
-            const moduleId = req.body.data.module;
+            const moduleId = req.body.module;
             const module = await ModulesModel.findById(moduleId.toString());
             const moduleName = module.name;
             const model = modules[moduleName];
@@ -49,12 +49,12 @@ const DataController = {
                 return res.status(400).json({ error: 'Invalid module name' });
             }
     
-            const data = req.body.data;
+            const data = req.body;
             
             if (!data) {
                 return res.status(400).json({ error: 'No data provided' });
             }
-            const compareResults = await compare(data, req.body.data.device, moduleId);
+            const compareResults = await compare(data, req.body.device, moduleId);
             if (compareResults && compareResults.length > 0) {
                 console.log("Alerts generated:", compareResults);
             }
