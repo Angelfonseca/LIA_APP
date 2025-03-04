@@ -4,10 +4,12 @@ const mongoose = require('mongoose');
 const path = require('path');
 const app = express();
 const user = require('./src/models/user.model');
+const dotevn = require('dotenv');
+dotevn.config();
 app.use(cors());
 app.use(express.json());
 
-mongoose.connect('mongodb://localhost/IoT_Framework', { useNewUrlParser: true, useUnifiedTopology: true });
+const DBURI = process.env.MONGODB_URI || 'mongodb://localhost/IoT_Framework';
 
 app.use('/api/devices', require('./src/routes/devices.routes'));
 app.use(express.static(path.join(__dirname, '../frontend/dist')));
@@ -30,7 +32,7 @@ app.use(express.json());
 const PORT = parseInt(process.env.PORT, 10) || 3000;
 async function setup() {
     try {
-        await mongoose.connect('mongodb://localhost/IoT_Framework', { useNewUrlParser: true, useUnifiedTopology: true });
+        await mongoose.connect(DBURI, { useNewUrlParser: true, useUnifiedTopology: true });
         const users = await user.find({});
         if (users.length) {
             app.listen(PORT, () => {

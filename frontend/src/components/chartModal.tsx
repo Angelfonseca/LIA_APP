@@ -12,7 +12,7 @@ interface ChartModalProps {
 
 interface DataPoint {
   date: string;
-  values: { name: string; value: number }[];
+  values: { name: string; value: number; sensor: string; date: string }[];
 }
 
 interface DataPoints {
@@ -119,7 +119,7 @@ const ChartModal: React.FC<ChartModalProps> = ({ isOpen, onClose, id }) => {
         module: selectedGraphModule,
         chartType,
         selectedFields,
-        chartData: response,
+        chartData: response.data[0].data,
       };
       console.log("New graph config:", newGraphConfig);
       setGraphs((prev) => [...prev, newGraphConfig]);
@@ -134,8 +134,7 @@ const ChartModal: React.FC<ChartModalProps> = ({ isOpen, onClose, id }) => {
 
   const handleDownloadGraph = async (
     graphConfig: GraphConfig,
-    index: number,
-    format: "png"
+    index: number
   ) => {
     setIsDownloading(true);
     const chartElement = document.querySelector(`#chart-${index}`);
@@ -269,7 +268,7 @@ const ChartModal: React.FC<ChartModalProps> = ({ isOpen, onClose, id }) => {
                       datos={graphConfig.chartData}
                       chartType={graphConfig.chartType}
                       selectedFields={graphConfig.selectedFields}
-                      fullScreen={false}
+                      groupBy="date"
                       />
                       <button
                       onClick={() => handleRemoveGraph(index)}
@@ -280,7 +279,7 @@ const ChartModal: React.FC<ChartModalProps> = ({ isOpen, onClose, id }) => {
                       </button>
                       <button
                       onClick={() =>
-                        handleDownloadGraph(graphConfig, index, "png")
+                        handleDownloadGraph(graphConfig, index)
                       }
                       className="btn btn-green"
                       disabled={isDownloading}

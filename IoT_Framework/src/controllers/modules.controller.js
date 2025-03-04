@@ -4,6 +4,14 @@ const {modules, listModules} = require('../models/data/index');
 const { create } = require('../models/user.model');
 
 const ModulesController = {
+    create: async (req, res) => {
+        try {
+            const modelo = await ModuleSchema.create(req.body);
+            res.json(modelo);
+        } catch (error) {
+            res.status(500).json({ message: error.message });
+        }
+    },
     getbyId: async (req, res) => {
         try {
             const modelo = await ModuleSchema.findById(req.params.id);
@@ -77,13 +85,17 @@ const getGraphableAttributes = (jsonData) => {
     };
 
     jsonData.forEach(dataEntry => {
-        if (dataEntry.Sensores && Array.isArray(dataEntry.Sensores)) {
-            dataEntry.Sensores.forEach(sensor => {
-                if (sensor.sensor) {
-                    const sensorPrefix = `Sensores[${sensor.sensor}]`;
-                    extractAttributes(sensor, sensorPrefix);
-                }
-            });
+        if (dataEntry.Sensores && typeof dataEntry.Sensores === 'object') {
+            const sensorPrefix = `Sensores[${dataEntry.Sensores.sensor || 'unknown'}]`;
+            extractAttributes(dataEntry.Sensores, sensorPrefix);
+        }
+        if (dataEntry.rack) {
+            const rackPrefix = `Rack[${dataEntry.rack}]`;
+            extractAttributes(dataEntry, rackPrefix);
+        }
+        if (dataEntry.granjaCamara) {
+            const granjaCamaraPrefix = `GranjaCamara[${dataEntry.granjaCamara}]`;
+            extractAttributes(dataEntry, granjaCamaraPrefix);
         }
     });
 

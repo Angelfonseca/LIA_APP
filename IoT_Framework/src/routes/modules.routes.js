@@ -3,6 +3,7 @@ const ModuleController = require('../controllers/modules.controller');
 const router = require('express').Router();
 
 router.get('/', ModuleController.getAll);
+router.post('/', ModuleController.create);
 router.get('/:id', ModuleController.getbyId);
 router.get('/name/:name', ModuleController.getByName);
 router.delete('/:id', ModuleController.delete);

@@ -21,6 +21,7 @@ interface GraphConfig {
   chartType: "bar" | "line" | "scatter";
   selectedFields: string[];
   chartData: DataPoint[];
+  groupBy: string;
 }
 
 interface module {
@@ -33,7 +34,7 @@ interface Modules {
 
 const ChartView: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const [modules, setModules] = useState<string[]>([]);
+  const [modules, setModules] = useState<module[]>([]);
   const [selectedGraphModule, setSelectedGraphModule] = useState<string>("");
   const [groupBy, setGroupBy] = useState<string>(""); // Día, 3 días, 5 días, etc.
 
@@ -115,7 +116,7 @@ const ChartView: React.FC = () => {
     )
       return;
     try {
-      const response = await apiService.post<{ data: DataPoints[] }>(
+      const response = await apiService.post<DataPoints>(
         `data/range/${id}`,
         {
           module: selectedGraphModule,
@@ -126,9 +127,9 @@ const ChartView: React.FC = () => {
         }
       );
   
-      const processedData = Object.values(response).map((dataPoint) => {
+      const processedData = response.data.map((dataPoint: DataPoint) => {
         // Agrupar los datos por 'sensor' o 'name'
-        const groupedValues = dataPoint.values.reduce((acc, value) => {
+        const groupedValues = dataPoint.values.reduce((acc: Record<string, number[]>, value: { sensor: string; value: number }) => {
           const key = value.sensor; // Agrupamos por sensor
           if (!acc[key]) acc[key] = [];
           acc[key].push(value.value);
@@ -136,12 +137,15 @@ const ChartView: React.FC = () => {
         }, {} as Record<string, number[]>);
   
         // Calcular estadísticas para cada grupo
-        const processedValues = Object.entries(groupedValues).map(([sensor, values]) => ({
-          sensor,
-          min: Math.min(...values),
-          max: Math.max(...values),
-          avg: values.reduce((sum, v) => sum + v, 0) / values.length,
-        }));
+        const processedValues = Object.entries(groupedValues).map(([sensor, values]) => {
+          const numericValues = values as number[];
+          return {
+            sensor,
+            min: Math.min(...numericValues),
+            max: Math.max(...numericValues),
+            avg: numericValues.reduce((sum, v) => sum + v, 0) / numericValues.length,
+          };
+        });
   
         return {
           ...dataPoint,
@@ -171,8 +175,7 @@ const ChartView: React.FC = () => {
 
   const handleDownloadGraph = async (
     graphConfig: GraphConfig,
-    index: number,
-    format: "png"
+    index: number
   ) => {
     setIsDownloading(true);
     const chartElement = document.querySelector(`#chart-${index}`);
@@ -220,7 +223,7 @@ const ChartView: React.FC = () => {
               className="module-select"
             >
               <option value="">--Selecciona un módulo--</option>
-              {modules.map((module, index) => (
+              {modules.map((module) => (
                 <option key={module._id} value={module._id}>
                   {module.name}
                 </option>
@@ -330,7 +333,9 @@ const ChartView: React.FC = () => {
                     <Chart
                       datos={graphConfig.chartData}
                       chartType={graphConfig.chartType}
-                      fullScreen={false}
+                      title={graphConfig.name}
+                      selectedFields={graphConfig.selectedFields}
+                      groupBy={graphConfig.groupBy}
                     />{" "}
                     <br />
                     <button
@@ -342,7 +347,7 @@ const ChartView: React.FC = () => {
                     </button>
                     <button
                       onClick={() =>
-                        handleDownloadGraph(graphConfig, index, "png")
+                        handleDownloadGraph(graphConfig, index)
                       }
                       className="btn btn-green"
                       disabled={isDownloading}
