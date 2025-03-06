@@ -168,7 +168,7 @@ const DataController = {
                 device: id,
                 createdAt: { $gte: startDate, $lte: endDate },
             });
-            console.log(data);
+
             if (!data || data.length === 0) {
                 return res.status(404).json({ error: 'No data found for the specified range' });
             }
