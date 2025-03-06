@@ -18,9 +18,9 @@ app.use(express.static(path.join(__dirname, '../frontend/dist')));
 //     res.sendFile(path.join(__dirname, '../frontend/dist', 'index.html'));
 // });
 
-app.use('/api/users', require('./src/routes/users.routes'))
+app.use('/api/users', require('./src/routes/users.routes'));
 
-app.use('/api/data', require('./src/routes/data.routes'))
+app.use('/api/data', require('./src/routes/data.routes'));
 app.use('/api/creator', require('./src/routes/creator.routes'));
 app.use('/api/filters', require('./src/routes/filters.routes'));
 app.use('/api/alerts', require('./src/routes/alerts.routes'));

@@ -150,7 +150,9 @@ const DataController = {
             const module = await ModulesModel.findById(moduleId);
             const moduleName = module.name;
             const model = modules[moduleName];
-            const { startDate, endDate, filters, groupBy } = req.body;
+            let { startDate, endDate, filters } = req.body;
+            startDate = new Date(startDate);
+            endDate = new Date(endDate);
     
             if (!model) {
                 return res.status(400).json({ error: 'Invalid module name' });
@@ -166,7 +168,7 @@ const DataController = {
                 device: id,
                 createdAt: { $gte: startDate, $lte: endDate },
             });
-    
+            console.log(data);
             if (!data || data.length === 0) {
                 return res.status(404).json({ error: 'No data found for the specified range' });
             }
@@ -177,30 +179,58 @@ const DataController = {
     
             const selectedData = data.map(entry => {
                 const values = [];
-    
+                
                 filters.forEach(filter => {
-                    const match = filter.match(/(.+)\[(.+)\]\.(.+)/);
-                    if (match) {
-                        const [, mainKey, sensorName, nestedKey] = match;
-                        if (Array.isArray(entry[mainKey])) {
-                            entry[mainKey].forEach(nestedObject => {
-                                if (nestedObject && nestedObject.sensor === sensorName && nestedObject[nestedKey] !== undefined) {
-                                    values.push({
-                                        name: filter,
-                                        value: nestedObject[nestedKey],
-                                        sensor: sensorName,
-                                        date: entry.createdAt,
-                                    });
-                                }
+                    const { sensor, variable } = filter;
+                    
+                    // Case 1: Check if entry has Sensores array with matching sensor
+                    if (entry.Sensores && Array.isArray(entry.Sensores)) {
+                        const matchingSensor = entry.Sensores.find(s => s.sensor === sensor);
+                        if (matchingSensor && matchingSensor[variable] !== undefined) {
+                            values.push({
+                                name: variable,
+                                value: matchingSensor[variable],
+                                sensor: sensor,
+                                date: entry.createdAt,
+                                rack: matchingSensor.rack || "N/A",
+                                granjaCamara: matchingSensor.granjaCamara || "N/A"
                             });
                         }
-                    } else {
-                        if (entry[filter] !== undefined) {
+                    }
+                    // Case 1.5: Check if entry has Sensores as an object with sensor property
+                    else if (entry.Sensores && typeof entry.Sensores === 'object' && entry.Sensores.sensor === sensor) {
+                        if (entry.Sensores[variable] !== undefined) {
                             values.push({
-                                name: filter,
-                                value: entry[filter],
-                                sensor: entry.Sensores?.sensor || null,
+                                name: variable,
+                                value: entry.Sensores[variable],
+                                sensor: sensor,
                                 date: entry.createdAt,
+                                rack: entry.Sensores.rack || "N/A",
+                                granjaCamara: entry.Sensores.granjaCamara || "N/A"
+                            });
+                        }
+                    }
+                    // Case 2: Check if entry has a sensor field that matches
+                    else if (entry.sensor === sensor && entry[variable] !== undefined) {
+                        values.push({
+                            name: variable,
+                            value: entry[variable],
+                            sensor: sensor,
+                            date: entry.createdAt,
+                            rack: entry.rack || "N/A",
+                            granjaCamara: entry.granjaCamara || "N/A"
+                        });
+                    }
+                    // Case 3: Check if entry itself has a field with sensor name
+                    else if (entry[sensor] && typeof entry[sensor] === 'object') {
+                        if (entry[sensor][variable] !== undefined) {
+                            values.push({
+                                name: variable,
+                                value: entry[sensor][variable],
+                                sensor: sensor,
+                                date: entry.createdAt,
+                                rack: entry[sensor].rack || entry.rack || "N/A",
+                                granjaCamara: entry[sensor].granjaCamara || entry.granjaCamara || "N/A"
                             });
                         }
                     }
@@ -212,10 +242,10 @@ const DataController = {
                 };
             });
     
-            const filteredSelectedData = selectedData.filter(item => item.values.length > 0);
-            const aggregatedData = aggregateData(filteredSelectedData, groupBy);
-    
-            res.json(aggregatedData);
+            const filteredData = selectedData.filter(item => item.values.length > 0);
+            
+            // Just return the filtered data without any grouping
+            res.json(filteredData);
         } catch (error) {
             console.error('Error fetching data:', error);
             res.status(500).json({ error: 'Failed to fetch data by date range' });
@@ -317,23 +347,69 @@ const DataController = {
     },
     getAvailableDataToGraphic: async (req, res) => {
         try {
-            const moduleId = req.body.module; 
-            const modelName = await ModulesModel.findById(moduleId);
-            if (!modelName) {
-                return res.status(400).json({ error: 'Invalid module ID' });
-            }
-            const model = modules[modelName.name];
+            const moduleId = req.body.module;
+            const module = await ModulesModel.findById(moduleId);
+            const moduleName = module.name;
+            const model = modules[moduleName];
+            
             if (!model) {
                 return res.status(400).json({ error: 'Invalid module name' });
             }
+            
             const id = req.params.id;
             const data = await model.find({ device: id });
+            
             if (!data || data.length === 0) {
-                return res.status(404).json({ error: 'Data not found' });
+                return res.status(404).json({ error: 'No data found for this device' });
             }
-            const graphableAttributes = getGraphableAttributes(data);
-    
-            res.json({ graphableAttributes });
+            
+            // Track unique sensors and their measurable variables
+            const sensorsMap = new Map();
+            
+            data.forEach(entry => {
+                // Handle case where sensor data is at the top level of the entry
+                // This would be the case for entries with a single sensor in each post
+                if (entry.sensor && typeof entry.sensor === 'string') {
+                    const sensorName = entry.sensor;
+                    if (!sensorsMap.has(sensorName)) {
+                        sensorsMap.set(sensorName, new Set());
+                    }
+                    
+                    for (const [key, value] of Object.entries(entry)) {
+                        if (typeof value === 'number' && key !== 'sensor' && key !== 'rack' && key !== 'granjaCamara') {
+                            sensorsMap.get(sensorName).add(key);
+                        }
+                    }
+                }
+                
+                // Handle Sensores field if it exists
+                if (entry.Sensores) {
+                    // Handle array of sensors
+                    if (Array.isArray(entry.Sensores)) {
+                        entry.Sensores.forEach(sensorData => {
+                            processSensorData(sensorData, sensorsMap);
+                        });
+                    } 
+                    // Handle single sensor object
+                    else if (typeof entry.Sensores === 'object') {
+                        processSensorData(entry.Sensores, sensorsMap);
+                    }
+                }
+            });
+            
+            // Convert Map to array structure for response
+            const sensors = [];
+            sensorsMap.forEach((variables, sensorName) => {
+                sensors.push({
+                    name: sensorName,
+                    variables: Array.from(variables)
+                });
+            });
+            
+            res.json({
+                values: sensors
+            });
+            
         } catch (error) {
             console.error("Error fetching data:", error);
             res.status(500).json({ error: 'Failed to fetch data' });
@@ -341,32 +417,25 @@ const DataController = {
     }
     
 };
-const getGraphableAttributes = (jsonData) => {
-    const graphableAttributes = new Set();
 
-    const extractAttributes = (obj, prefix = '') => {
-        for (const key in obj) {
-            if (obj.hasOwnProperty(key)) {
-                const value = obj[key];
-                const fullKey = prefix ? `${prefix}.${key}` : key;
-
-                if (typeof value === 'number') {
-                    graphableAttributes.add(fullKey);
-                } else if (typeof value === 'object' && value !== null) {
-                    extractAttributes(value, fullKey);
-                }
-            }
+// Helper function to process sensor data and extract measurable variables
+const processSensorData = (sensorData, sensorsMap) => {
+    if (!sensorData || !sensorData.sensor) return;
+    
+    const sensorName = sensorData.sensor;
+    
+    if (!sensorsMap.has(sensorName)) {
+        sensorsMap.set(sensorName, new Set());
+    }
+    
+    // Add all numeric properties as measurable variables
+    for (const [key, value] of Object.entries(sensorData)) {
+        if (typeof value === 'number' && key !== 'sensor') {
+            sensorsMap.get(sensorName).add(key);
         }
-    };
-
-    jsonData.forEach(dataEntry => {
-        if (dataEntry.Sensores && Array.isArray(dataEntry.Sensores)) {
-            dataEntry.Sensores.forEach(sensor => extractAttributes(sensor, 'Sensores'));
-        }
-    });
-
-    return Array.from(graphableAttributes);
+    }
 };
+
 const aggregateData = (data, groupBy) => {
     switch (groupBy) {
       case "day":
@@ -424,5 +493,39 @@ const groupByDays = (data, days) => {
     }, {});
     return Object.values(grouped);
   };
+
+const groupByRack = (data) => {
+    // First, flatten the data to get all values
+    const allValues = data.reduce((acc, item) => {
+        return acc.concat(item.values.map(v => ({...v, originalDate: item.date})));
+    }, []);
+    
+    // Group by rack
+    const grouped = allValues.reduce((acc, value) => {
+        const rack = value.rack || "Sin Rack";
+        if (!acc[rack]) acc[rack] = { date: `Rack: ${rack}`, values: [] };
+        acc[rack].values.push(value);
+        return acc;
+    }, {});
+    
+    return Object.values(grouped);
+};
+
+const groupByGranjaCamara = (data) => {
+    // First, flatten the data to get all values
+    const allValues = data.reduce((acc, item) => {
+        return acc.concat(item.values.map(v => ({...v, originalDate: item.date})));
+    }, []);
+    
+    // Group by granjaCamara
+    const grouped = allValues.reduce((acc, value) => {
+        const granjaCamara = value.granjaCamara || "Sin Granja/Cámara";
+        if (!acc[granjaCamara]) acc[granjaCamara] = { date: `Granja/Cámara: ${granjaCamara}`, values: [] };
+        acc[granjaCamara].values.push(value);
+        return acc;
+    }, {});
+    
+    return Object.values(grouped);
+};
 
 module.exports = DataController;
